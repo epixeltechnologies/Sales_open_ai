@@ -1,0 +1,202 @@
+// This is your Prisma schema file
+// Learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  email       String   @unique
+  password    String
+  companyName String
+  plan        Plan     @default(STARTER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  calls           Call[]
+  leads           Lead[]
+  agentSettings   AgentSettings?
+  appointments    Appointment[]
+  subscription    Subscription?
+  callLogs        CallLog[]
+
+  @@map("users")
+}
+
+model Call {
+  id             String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String     @db.ObjectId
+  leadId         String?    @db.ObjectId
+  twilioCallSid  String?    @unique
+  vapiCallId     String?    @unique
+  status         CallStatus @default(INITIATED)
+  direction      Direction  @default(INBOUND)
+  fromNumber     String
+  toNumber       String
+  duration       Int?       // seconds
+  recordingUrl   String?
+  transcript     String?
+  summary        String?
+  sentiment      String?
+  qualified      Boolean?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user       User     @relation(fields: [userId], references: [id])
+  lead       Lead?    @relation(fields: [leadId], references: [id])
+  callLogs   CallLog[]
+  appointment Appointment?
+
+  @@map("calls")
+}
+
+model Lead {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String     @db.ObjectId
+  callId      String?    @db.ObjectId
+  name        String
+  phone       String
+  email       String?
+  company     String?
+  budget      String?
+  painPoints  String?
+  status      LeadStatus @default(NEW)
+  score       Int?       @default(0)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  calls        Call[]
+  appointments Appointment[]
+
+  @@map("leads")
+}
+
+model AgentSettings {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId                 String   @unique @db.ObjectId
+  agentName              String   @default("Alex")
+  welcomeMessage         String   @default("Hello! Thank you for calling. How can I help you today?")
+  qualificationQuestions Json     @default("[]")
+  objectionHandling      String   @default("I understand your concerns. Let me address them...")
+  voice                  String   @default("rachel")
+  temperature            Float    @default(0.7)
+  language               String   @default("en-US")
+  maxCallDuration        Int      @default(600) // seconds
+  followUpEmail          Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("agent_settings")
+}
+
+model Appointment {
+  id          String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String            @db.ObjectId
+  leadId      String?           @db.ObjectId
+  callId      String?           @unique @db.ObjectId
+  title       String
+  scheduledAt DateTime
+  duration    Int               @default(30) // minutes
+  status      AppointmentStatus @default(SCHEDULED)
+  meetingUrl  String?
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  user User  @relation(fields: [userId], references: [id])
+  lead Lead? @relation(fields: [leadId], references: [id])
+  call Call? @relation(fields: [callId], references: [id])
+
+  @@map("appointments")
+}
+
+model Subscription {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  userId               String             @unique @db.ObjectId
+  stripeCustomerId     String?
+  stripeSubscriptionId String?
+  plan                 Plan               @default(STARTER)
+  status               SubscriptionStatus @default(ACTIVE)
+  minutesUsed          Int                @default(0)
+  minutesLimit         Int                @default(300)
+  currentPeriodStart   DateTime           @default(now())
+  currentPeriodEnd     DateTime
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("subscriptions")
+}
+
+model CallLog {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  callId    String   @db.ObjectId
+  event     String
+  data      Json?
+  timestamp DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  call Call @relation(fields: [callId], references: [id])
+
+  @@map("call_logs")
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  ENTERPRISE
+}
+
+enum CallStatus {
+  INITIATED
+  RINGING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  NO_ANSWER
+  BUSY
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  UNQUALIFIED
+  APPOINTMENT_BOOKED
+  CONVERTED
+  LOST
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
